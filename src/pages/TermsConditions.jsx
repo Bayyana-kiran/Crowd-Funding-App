@@ -100,7 +100,6 @@ const TermsConditions = () => {
         })}
       </div>
 
-      {/* Agreement Section */}
       <div className="bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Agreement</h3>
         <p className="text-gray-600 mb-6">
