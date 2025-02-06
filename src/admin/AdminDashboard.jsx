@@ -45,7 +45,6 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Platform Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {platformStats.map((stat) => {
           const Icon = stat.icon;
