@@ -30,7 +30,6 @@ const NGODashboard = () => {
         </button>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
