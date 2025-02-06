@@ -128,7 +128,6 @@ const AdminDashboard = () => {
         </nav>
       </div>
 
-      {/* Content */}
       {activeTab === 'pending' ? (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
