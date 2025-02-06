@@ -8,6 +8,12 @@ import AdminVerification from './pages/AdminVerification';
 import CampaignsNGOs from './pages/CampaignsNGOs';
 import CampaignDetails from './pages/CampaignDetails';
 import NGORegistration from './pages/NGORegistration';
+import NGODashboard from './pages/NGODashboard';
+import UserDashboard from './pages/UserDashboard';
+import WithdrawalRequest from './pages/WithdrawalRequest';
+import HelpSupport from './pages/HelpSupport';
+import Explorer from './pages/Explorer';
+import TermsConditions from './pages/TermsConditions';
 
 
 function App() {
@@ -23,6 +29,12 @@ function App() {
             <Route path="/campaigns" element={<CampaignsNGOs />} />
             <Route path="/campaign/:id" element={<CampaignDetails />} />
             <Route path="/ngo/register" element={<NGORegistration />} />
+            <Route path="/ngo-dashboard" element={<NGODashboard />} />
+            <Route path="/user-dashboard" element={<UserDashboard />} />
+            <Route path="/withdrawal" element={<WithdrawalRequest />} />
+            <Route path="/help" element={<HelpSupport />} />
+            <Route path="/explorer" element={<Explorer />} />
+            <Route path="/terms" element={<TermsConditions />} />
           </Routes>
         </main>
         <Footer />
