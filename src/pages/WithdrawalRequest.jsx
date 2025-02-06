@@ -25,7 +25,6 @@ const WithdrawalRequest = () => {
         <p className="mt-2 text-gray-600">Submit a request to withdraw funds from your campaigns</p>
       </div>
 
-      {/* New Request Form */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-6">New Withdrawal Request</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
