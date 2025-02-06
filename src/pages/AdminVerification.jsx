@@ -30,7 +30,7 @@ function AdminVerification() {
       status: "rejected",
       documents: ["documents.pdf"],
       submittedDate: "2024-03-08",
-      rejectionReason: "Incomplete documentation",
+      rejectionReason: "Incomplete ",
     },
   ];
 
