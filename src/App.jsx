@@ -14,7 +14,7 @@ import WithdrawalRequest from './pages/WithdrawalRequest';
 import HelpSupport from './pages/HelpSupport';
 import Explorer from './pages/Explorer';
 import TermsConditions from './pages/TermsConditions';
-import AdminDashboard from './admin/AdminDashboard';
+import AdminDash from './admin/AdminDashboard';
 
 
 function App() {
@@ -36,7 +36,7 @@ function App() {
             <Route path="/help" element={<HelpSupport />} />
             <Route path="/explorer" element={<Explorer />} />
             <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin" element={<AdminDash />} />
           </Routes>
         </main>
         <Footer />
