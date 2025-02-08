@@ -1,11 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Web3 from 'web3';
 import { Wallet, AlertCircle, Loader } from 'lucide-react';
 
 function MetaMaskLogin() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
+  const [walletAddress, setWalletAddress] = useState(null);
   const navigate = useNavigate();
+
+  // Create an instance of Web3
+  const web3 = new Web3(window.ethereum);
+
+  useEffect(() => {
+    const checkWalletConnection = async () => {
+      if (window.ethereum) {
+        try {
+          const accounts = await web3.eth.getAccounts();
+          if (accounts.length > 0) {
+            setWalletAddress(accounts[0]); // Set wallet address in state
+            navigate('/user-dashboard');
+          }
+        } catch (err) {
+          console.error('Error checking wallet:', err);
+        }
+      }
+    };
+    checkWalletConnection();
+  }, [navigate, web3]);
 
   const connectWallet = async () => {
     setIsConnecting(true);
@@ -16,19 +38,25 @@ function MetaMaskLogin() {
         throw new Error('MetaMask is not installed');
       }
 
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
+      // Request account access
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+      const accounts = await web3.eth.getAccounts();
 
       if (accounts.length > 0) {
-        // Successfully connected
-        navigate('/dashboard');
+        setWalletAddress(accounts[0]); // Set wallet address in state
+        navigate('/user-dashboard');
       }
     } catch (err) {
       setError(err.message || 'Failed to connect wallet');
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const disconnectWallet = () => {
+    setWalletAddress(null);
+    navigate('/login');
   };
 
   return (
@@ -42,7 +70,7 @@ function MetaMaskLogin() {
             Connect your wallet
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Connect with MetaMask to access your dashboard and make contributions
+            Connect with MetaMask to access your dashboard and make contributions.
           </p>
         </div>
 
@@ -56,20 +84,32 @@ function MetaMaskLogin() {
         )}
 
         <div className="mt-8 space-y-6">
-          <button
-            onClick={connectWallet}
-            disabled={isConnecting}
-            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
-          >
-            {isConnecting ? (
-              <>
-                <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
-                Connecting...
-              </>
-            ) : (
-              'Connect MetaMask'
-            )}
-          </button>
+          {!walletAddress ? (
+            <button
+              onClick={connectWallet}
+              disabled={isConnecting}
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
+            >
+              {isConnecting ? (
+                <>
+                  <Loader className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
+                  Connecting...
+                </>
+              ) : (
+                'Connect MetaMask'
+              )}
+            </button>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-600">Connected Wallet: {walletAddress}</p>
+              <button
+                onClick={disconnectWallet}
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Disconnect Wallet
+              </button>
+            </div>
+          )}
 
           <div className="text-sm text-center">
             <p className="text-gray-600">

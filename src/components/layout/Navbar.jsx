@@ -1,9 +1,37 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Menu, X, Wallet, Search } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { Menu, X, Wallet, Search } from "lucide-react";
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [account, setAccount] = useState(localStorage.getItem("account") || null);
+
+  useEffect(() => {
+    async function checkMetaMask() {
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          localStorage.setItem("account", accounts[0]); // Store in local storage
+        } else {
+          setAccount(null);
+          localStorage.removeItem("account"); // Remove if not connected
+        }
+      }
+    }
+    checkMetaMask();
+
+    // Listen for account changes
+    window.ethereum?.on("accountsChanged", (accounts) => {
+      if (accounts.length > 0) {
+        setAccount(accounts[0]);
+        localStorage.setItem("account", accounts[0]);
+      } else {
+        setAccount(null);
+        localStorage.removeItem("account");
+      }
+    });
+  }, []);
 
   return (
     <nav className="bg-white shadow-lg">
@@ -29,7 +57,7 @@ function Navbar() {
               </Link>
             </div>
           </div>
-          
+
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             <div className="relative">
               <input
@@ -40,10 +68,10 @@ function Navbar() {
               <Search className="absolute right-3 top-1.5 h-4 w-4 text-gray-400" />
             </div>
             <Link
-              to="/login"
+              to={account ? "/user-dashboard" : "/login"}
               className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
             >
-              Connect Wallet
+              {account ? "Dashboard" : "Connect Wallet"}
             </Link>
           </div>
 
@@ -62,28 +90,16 @@ function Navbar() {
       {isOpen && (
         <div className="sm:hidden">
           <div className="pt-2 pb-3 space-y-1">
-            <Link
-              to="/campaigns"
-              className="block pl-3 pr-4 py-2 border-l-4 border-indigo-500 text-base font-medium text-indigo-700 bg-indigo-50"
-            >
+            <Link to="/campaigns" className="block pl-3 pr-4 py-2 border-l-4 border-indigo-500 text-base font-medium text-indigo-700 bg-indigo-50">
               Campaigns
             </Link>
-            <Link
-              to="/ngo/register"
-              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
-            >
+            <Link to="/ngo/register" className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300">
               Register NGO
             </Link>
-            <Link
-              to="/explorer"
-              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
-            >
+            <Link to="/explorer" className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300">
               Explorer
             </Link>
-            <Link
-              to="/help"
-              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300"
-            >
+            <Link to="/help" className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 hover:border-gray-300">
               Help
             </Link>
             <div className="px-3 py-2">
@@ -94,10 +110,10 @@ function Navbar() {
               />
             </div>
             <Link
-              to="/login"
+              to={account ? "/user-dashboard" : "/login"}
               className="block mx-3 px-4 py-2 text-center border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
             >
-              Connect Wallet
+              {account ? "Dashboard" : "Connect Wallet"}
             </Link>
           </div>
         </div>
