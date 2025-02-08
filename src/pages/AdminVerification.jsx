@@ -1,48 +1,59 @@
-import React, { useState } from 'react';
-import { Shield, Search, CheckCircle, XCircle, FileText, User } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { db } from "../firebase/firebase.js"; // Keep this import from your firebase file
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore"; // Import 'doc' directly from 'firebase/firestore'
+import { Shield, Search, CheckCircle, XCircle, User } from "lucide-react";
 
 function AdminVerification() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTab, setSelectedTab] = useState('pending');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTab, setSelectedTab] = useState("pending");
+  const [registrationRequests, setRegistrationRequests] = useState([]);
 
-  // Mock data - In production, this would be fetched from your API
-  const registrationRequests = [
-    {
-      id: 1,
-      ngoName: "Global Water Foundation",
-      email: "contact@gwf.org",
-      status: "pending",
-      documents: ["registration.pdf", "tax_exempt.pdf"],
-      submittedDate: "2024-03-10",
-    },
-    {
-      id: 2,
-      ngoName: "Education First Initiative",
-      email: "info@edufi.org",
-      status: "approved",
-      documents: ["certification.pdf", "annual_report.pdf"],
-      submittedDate: "2024-03-09",
-    },
-    {
-      id: 3,
-      ngoName: "Green Earth Project",
-      email: "support@gep.org",
-      status: "rejected",
-      documents: ["documents.pdf"],
-      submittedDate: "2024-03-08",
-      rejectionReason: "Incomplete ",
-    },
-  ];
+  // Fetch Data from Firestore
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "ngo"));
+        const requests = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        console.log("Fetched Requests:", requests); // Log the fetched requests
+        setRegistrationRequests(requests);
+      } catch (error) {
+        console.error("Error fetching registration requests:", error);
+      }
+    };
+    fetchRequests();
+  }, []);
 
-  const filteredRequests = registrationRequests.filter(request => 
-    request.status === selectedTab &&
-    (request.ngoName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     request.email.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Filtered requests based on selected tab and search term
+  const filteredRequests = registrationRequests.filter(
+    (request) =>
+      (request.status === selectedTab || selectedTab === "pending") &&
+      (request.ngoName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       request.email?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  console.log("Filtered Requests:", filteredRequests); // Check the filtered data
 
-  const handleAction = (id, action) => {
-    console.log(`${action} request ${id}`);
-    // Implement approval/rejection logic here
+  // Approve or Reject Action
+  const handleAction = async (id, action) => {
+    try {
+      const requestRef = doc(db, "ngo", id); // Use 'doc' from firestore
+      await updateDoc(requestRef, {
+        status: action === "approve" ? "approved" : "rejected",
+      });
+
+      // Update state to reflect changes instantly
+      setRegistrationRequests((prevRequests) =>
+        prevRequests.map((request) =>
+          request.id === id ? { ...request, status: action === "approve" ? "approved" : "rejected" } : request
+        )
+      );
+
+      console.log(`${action}d request ${id}`);
+    } catch (error) {
+      console.error(`Error ${action}ing request:`, error);
+    }
   };
 
   return (
@@ -67,14 +78,14 @@ function AdminVerification() {
       <div className="bg-white rounded-lg shadow">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex">
-            {['pending', 'approved', 'rejected'].map((tab) => (
+            {["pending", "approved", "rejected"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setSelectedTab(tab)}
                 className={`${
                   selectedTab === tab
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? "border-indigo-500 text-indigo-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm capitalize`}
               >
                 {tab}
@@ -91,12 +102,6 @@ function AdminVerification() {
                   NGO Details
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Submitted Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Documents
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -110,49 +115,30 @@ function AdminVerification() {
                         <User className="h-6 w-6 text-gray-500" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {request.ngoName}
-                        </div>
+                        <div className="text-sm font-medium text-gray-900">{request.ngoName}</div>
                         <div className="text-sm text-gray-500">{request.email}</div>
+                        <div className="text-sm text-gray-500">{request.walletAddress}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {request.submittedDate}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col space-y-1">
-                      {request.documents.map((doc, index) => (
-                        <div key={index} className="flex items-center text-sm text-gray-500">
-                          <FileText className="h-4 w-4 mr-1" />
-                          {doc}
-                        </div>
-                      ))}
-                    </div>
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    {selectedTab === 'pending' && (
+                    {selectedTab === "pending" && (
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => handleAction(request.id, 'approve')}
+                          onClick={() => handleAction(request.id, "approve")}
                           className="text-green-600 hover:text-green-900 flex items-center"
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Approve
                         </button>
                         <button
-                          onClick={() => handleAction(request.id, 'reject')}
+                          onClick={() => handleAction(request.id, "reject")}
                           className="text-red-600 hover:text-red-900 flex items-center"
                         >
                           <XCircle className="h-4 w-4 mr-1" />
                           Reject
                         </button>
                       </div>
-                    )}
-                    {selectedTab === 'rejected' && request.rejectionReason && (
-                      <span className="text-red-600">
-                        Reason: {request.rejectionReason}
-                      </span>
                     )}
                   </td>
                 </tr>

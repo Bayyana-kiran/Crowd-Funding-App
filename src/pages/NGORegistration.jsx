@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Web3 from "web3";
 import { db, collection, addDoc } from "../firebase/firebase";
-import { CheckCircle, AlertCircle, Building2, Mail, Phone, Globe, FileText, Upload } from "lucide-react";
+import { CheckCircle, AlertCircle, Building2 } from "lucide-react";
 
 function NGORegistration() {
   const [formData, setFormData] = useState({
@@ -9,12 +10,31 @@ function NGORegistration() {
     phone: "",
     website: "",
     description: "",
-    documents: [],
+    walletAddress: "",
   });
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
+
+  useEffect(() => {
+    async function loadWallet() {
+      if (window.ethereum) {
+        try {
+          const web3 = new Web3(window.ethereum);
+          const accounts = await web3.eth.requestAccounts();
+          setFormData((prev) => ({ ...prev, walletAddress: accounts[0] }));
+          setWalletConnected(true);
+        } catch (err) {
+          setError("Please connect your MetaMask wallet.");
+        }
+      } else {
+        setError("MetaMask not detected. Please install MetaMask.");
+      }
+    }
+    loadWallet();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -25,6 +45,12 @@ function NGORegistration() {
     e.preventDefault();
     setSubmitting(true);
     setError("");
+
+    if (!formData.walletAddress) {
+      setError("Please connect your MetaMask wallet.");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       await addDoc(collection(db, "ngo"), formData);
@@ -67,6 +93,12 @@ function NGORegistration() {
           </div>
         )}
 
+        <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 rounded-md text-yellow-900">
+          <p>
+            <strong>Note:</strong> Your connected MetaMask wallet address will be set as the admin wallet.
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">NGO Name</label>
@@ -95,7 +127,15 @@ function NGORegistration() {
             <textarea name="description" rows="4" required value={formData.description} onChange={handleInputChange} className="w-full p-2 border rounded"></textarea>
           </div>
 
-          <button type="submit" disabled={submitting} className="w-full bg-indigo-600 text-white py-2 rounded">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Wallet Address</label>
+            <input type="text" value={formData.walletAddress} readOnly className="w-full p-2 border rounded bg-gray-100 text-gray-600" />
+            {!walletConnected && (
+              <p className="text-red-600 text-sm mt-1">Please connect MetaMask to proceed.</p>
+            )}
+          </div>
+
+          <button type="submit" disabled={submitting || !walletConnected} className="w-full bg-indigo-600 text-white py-2 rounded">
             {submitting ? "Submitting..." : "Submit Registration"}
           </button>
         </form>
