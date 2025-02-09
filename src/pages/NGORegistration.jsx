@@ -23,6 +23,7 @@ import {
 
 function NGORegistration() {
   const [walletConnected, setWalletConnected] = useState(false);
+  const[walletAddress, setWalletAddress] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -33,6 +34,7 @@ function NGORegistration() {
     uniqueDarpanId: "",
     description: "",
     ngoEmail: "",
+    walletAddress: "",  // Add wallet address field
     phone: "",
     website: "",
     address: "",
@@ -146,6 +148,7 @@ function NGORegistration() {
         try {
           await window.ethereum.request({ method: 'eth_requestAccounts' });
           setWalletConnected(true);
+          setWalletAddress(window.ethereum.selectedAddress);
         } catch (err) {
           setError("Failed to connect wallet");
         }
