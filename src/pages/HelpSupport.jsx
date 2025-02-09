@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { MessageCircle, Book, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 const HelpSupport = () => {
@@ -30,8 +30,15 @@ const HelpSupport = () => {
     { title: 'Understanding Smart Contracts', link: '#' }
   ];
 
+  const liveChatRef = useRef(null);
+  const faqRef = useRef(null);
+
+  const scrollToSection = (ref) => {
+    ref.current.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8 py-8 px-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Help & Support</h1>
         <p className="mt-2 text-gray-600">Find answers to common questions and learn how to use our platform</p>
@@ -39,7 +46,7 @@ const HelpSupport = () => {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow" onClick={() => scrollToSection(liveChatRef)}>
           <div className="flex items-center space-x-3">
             <div className="p-3 bg-blue-50 rounded-lg">
               <MessageCircle className="w-6 h-6 text-blue-600" />
@@ -61,7 +68,7 @@ const HelpSupport = () => {
             </div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow" onClick={() => scrollToSection(faqRef)}>
           <div className="flex items-center space-x-3">
             <div className="p-3 bg-purple-50 rounded-lg">
               <HelpCircle className="w-6 h-6 text-purple-600" />
@@ -74,8 +81,20 @@ const HelpSupport = () => {
         </div>
       </div>
 
+      {/* Live Chat */}
+      <div ref={liveChatRef} className="bg-white rounded-xl shadow-sm p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Still Need Help?</h2>
+        <p className="text-gray-600 mb-6">
+          Our support team is available 24/7 to help you with any questions or concerns.
+        </p>
+        <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+          <MessageCircle className="w-5 h-5 mr-2" />
+          Start Live Chat
+        </button>
+      </div>
+
       {/* FAQs */}
-      <div className="bg-white rounded-xl shadow-sm">
+      <div ref={faqRef} className="bg-white rounded-xl shadow-sm">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Frequently Asked Questions</h2>
         </div>
@@ -118,18 +137,6 @@ const HelpSupport = () => {
             </a>
           ))}
         </div>
-      </div>
-
-      {/* Contact Support */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Still Need Help?</h2>
-        <p className="text-gray-600 mb-6">
-          Our support team is available 24/7 to help you with any questions or concerns.
-        </p>
-        <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
-          <MessageCircle className="w-5 h-5 mr-2" />
-          Start Live Chat
-        </button>
       </div>
     </div>
   );
