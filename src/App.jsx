@@ -5,7 +5,7 @@ import Footer from './components/layout/Footer';
 import LandingPage from './pages/LandingPage';
 import MetaMaskLogin from './pages/MetaMaskLogin';
 import AdminVerification from './pages/AdminVerification';
-import CampaignsNGOs from './pages/CampaignsNGOs';
+import Campaigns from './pages/CampaignsNGOs';
 import CampaignDetails from './pages/CampaignDetails';
 import NGORegistration from './pages/NGORegistration';
 import NGODashboard from './pages/NGODashboard';
@@ -27,7 +27,7 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<MetaMaskLogin />} />
             <Route path="/admin" element={<AdminVerification />} />
-            <Route path="/campaigns" element={<CampaignsNGOs />} />
+            <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/campaign/:id" element={<CampaignDetails />} />
             <Route path="/ngo/register" element={<NGORegistration />} />
             <Route path="/ngo-dashboard" element={<NGODashboard />} />
@@ -36,7 +36,7 @@ function App() {
             <Route path="/help" element={<HelpSupport />} />
             <Route path="/explorer" element={<Explorer />} />
             <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/admin" element={<AdminDash />} />
+            <Route path="/admin-dashboard" element={<AdminDash />} />
           </Routes>
         </main>
         <Footer />

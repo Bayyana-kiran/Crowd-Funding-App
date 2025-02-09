@@ -9,29 +9,41 @@ const UserDashboard = () => {
   const [web3, setWeb3] = useState(null);
   const [balance, setBalance] = useState('');
   const [transactions, setTransactions] = useState([]);
+  const [donations, setDonations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const checkWalletConnection = async () => {
-      if (window.ethereum) {
-        try {
+    const fetchUserData = async () => {
+      try {
+        if (window.ethereum) {
           const web3Instance = new Web3(window.ethereum);
           setWeb3(web3Instance);
           const accounts = await web3Instance.eth.getAccounts();
+          
           if (accounts.length > 0) {
             setWalletAddress(accounts[0]);
+            
+            // Fetch user's donations
+            const response = await fetch(`http://localhost:5987/api/dashboard/donations/user/${accounts[0]}`);
+            const donationsData = await response.json();
+            setDonations(donationsData);
+
             fetchWalletData(accounts[0]);
           } else {
             navigate('/login');
           }
-        } catch (err) {
-          console.error('Error checking wallet:', err);
+        } else {
+          navigate('/login');
         }
-      } else {
-        navigate('/login');
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
-    checkWalletConnection();
+    fetchUserData();
   }, [navigate]);
 
   const fetchWalletData = async (address) => {
@@ -55,15 +67,17 @@ const UserDashboard = () => {
     }
   };
 
-  // const handleLogout = () => {
-  //   if (web3 && web3.currentProvider && web3.currentProvider.disconnect) {
-  //     web3.currentProvider.disconnect();
-  //     console.log('Logged out of MetaMask.');
-  //   }
-  //   setWalletAddress('');
-  //   setWeb3(null);
-  //   navigate('/login');
-  // };
+  if (loading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen text-red-600">
+        Error: {error}
+      </div>
+    );
+  }
 
   return (
     <div className='max-w-4xl mx-auto space-y-8 p-6'> 

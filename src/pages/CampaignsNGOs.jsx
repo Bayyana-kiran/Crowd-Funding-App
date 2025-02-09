@@ -1,167 +1,272 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Filter, Users, Target, Clock } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Calendar, DollarSign, Users, Clock, Plus } from "lucide-react";
+import CreateCampaignModal from "../components/campaigns/CreateCampaignModal";
+import DonateModal from "../components/campaigns/DonateModal";
 
-function CampaignsNGOs() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+const CampaignsNGOs = () => {
+    const navigate = useNavigate();
+    const [campaigns, setCampaigns] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [showCreateCampaign, setShowCreateCampaign] = useState(false);
+    const [ngoData, setNgoData] = useState(null);
+    const [userRole, setUserRole] = useState(null);
+    const [selectedCampaign, setSelectedCampaign] = useState(null);
+    const [showDonateModal, setShowDonateModal] = useState(false);
 
-  // Mock data - In production, this would be fetched from your blockchain/API
-  const campaigns = [
-    {
-      id: 1,
-      title: "Clean Water Initiative",
-      ngo: "Global Water Foundation",
-      category: "Environment",
-      image: "https://images.unsplash.com/photo-1541372556104-51a9ea9e4139?auto=format&fit=crop&q=80",
-      description: "Providing clean and safe drinking water to communities in need.",
-      progress: 75,
-      goal: "50,000",
-      raised: "37,500",
-      donors: 128,
-      daysLeft: 15,
-    },
-    {
-      id: 2,
-      title: "Education for All",
-      ngo: "Education First Initiative",
-      category: "Education",
-      image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&q=80",
-      description: "Supporting underprivileged children with quality education.",
-      progress: 60,
-      goal: "75,000",
-      raised: "45,000",
-      donors: 95,
-      daysLeft: 20,
-    },
-    {
-      id: 3,
-      title: "Renewable Energy Project",
-      ngo: "Green Earth Project",
-      category: "Environment",
-      image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&q=80",
-      description: "Implementing solar power solutions in rural communities.",
-      progress: 40,
-      goal: "100,000",
-      raised: "40,000",
-      donors: 72,
-      daysLeft: 30,
-    },
-  ];
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-  const categories = ['all', 'Environment', 'Education', 'Healthcare', 'Social', 'Technology'];
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const walletAddress = localStorage.getItem("account");
+            const role = localStorage.getItem("role");
+            setUserRole(role);
 
-  const filteredCampaigns = campaigns.filter(campaign => {
-    const matchesSearch = campaign.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         campaign.ngo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || campaign.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+            if (!walletAddress) {
+                throw new Error("Please connect your wallet first");
+            }
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Search and Filter Section */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 space-y-4 md:space-y-0">
-        <div className="relative w-full md:w-96">
-          <input
-            type="text"
-            placeholder="Search campaigns or NGOs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-          <Search className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <Filter className="h-5 w-5 text-gray-500" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          >
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category.charAt(0).toUpperCase() + category.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+            if (role === "ngo") {
+                // Fetch NGO data first
+                const ngoResponse = await fetch(
+                    `http://localhost:5987/api/dashboard/ngo/${walletAddress}`
+                );
+                if (!ngoResponse.ok)
+                    throw new Error("Failed to fetch NGO data");
+                const ngoData = await ngoResponse.json();
+                setNgoData(ngoData);
 
-      {/* Campaigns Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {filteredCampaigns.map((campaign) => (
-          <div key={campaign.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
-            <img
-              src={campaign.image}
-              alt={campaign.title}
-              className="w-full h-48 object-cover"
-            />
-            <div className="p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    {campaign.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 mt-1">by {campaign.ngo}</p>
-                </div>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                  {campaign.category}
-                </span>
-              </div>
-              
-              <p className="mt-4 text-gray-600 text-sm line-clamp-2">
-                {campaign.description}
-              </p>
+                // Then fetch NGO's campaigns
+                const campaignsResponse = await fetch(
+                    `http://localhost:5987/api/dashboard/campaigns/ngo/${ngoData.id}`
+                );
+                if (!campaignsResponse.ok)
+                    throw new Error("Failed to fetch campaigns");
+                const campaignsData = await campaignsResponse.json();
+                setCampaigns(campaignsData);
+            } else {
+                // Fetch all campaigns for regular users
+                const campaignsResponse = await fetch(
+                    "http://localhost:5987/api/dashboard/campaigns/all"
+                );
+                if (!campaignsResponse.ok)
+                    throw new Error("Failed to fetch campaigns");
+                const campaignsData = await campaignsResponse.json();
+                setCampaigns(campaignsData);
+            }
+        } catch (err) {
+            setError(err.message);
+            if (err.message.includes("wallet")) {
+                navigate("/login");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
 
-              <div className="mt-4">
-                <div className="relative pt-1">
-                  <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
-                    <div
-                      style={{ width: `${campaign.progress}%` }}
-                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500"
-                    ></div>
-                  </div>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>${campaign.raised} raised</span>
-                  <span>{campaign.progress}%</span>
-                  <span>Goal: ${campaign.goal}</span>
-                </div>
-              </div>
+    const handleCampaignCreated = (newCampaign) => {
+        setCampaigns([newCampaign, ...campaigns]);
+    };
 
-              <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
-                <div className="flex items-center">
-                  <Users className="h-4 w-4 mr-1" />
-                  <span>{campaign.donors} Donors</span>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-1" />
-                  <span>{campaign.daysLeft} Days Left</span>
-                </div>
-              </div>
+    const handleDonationSuccess = async (donation) => {
+        // Refresh campaign data
+        await fetchData();
+    };
 
-              <Link
-                to={`/campaign/${campaign.id}`}
-                className="mt-6 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                View Campaign
-              </Link>
+    const calculateProgress = (campaign) => {
+        const raised = parseFloat(campaign.totalRaised) || 0;
+        const goal = parseFloat(campaign.goal) || 0;
+        return goal > 0 ? Math.min((raised / goal) * 100, 100) : 0;
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
             </div>
-          </div>
-        ))}
-      </div>
+        );
+    }
 
-      {filteredCampaigns.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">
-            No campaigns found matching your criteria.
-          </p>
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen">
+                <div className="text-red-600 text-xl mb-4">{error}</div>
+                <button
+                    onClick={() => navigate("/login")}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                    Connect Wallet
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="flex justify-between items-center mb-8">
+                <h1 className="text-2xl font-bold text-gray-900">
+                    {userRole === "ngo" ? "My Campaigns" : "All Campaigns"}
+                </h1>
+                {userRole === "ngo" && (
+                    <button
+                        onClick={() => setShowCreateCampaign(true)}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center"
+                    >
+                        <Plus className="h-5 w-5 mr-2" />
+                        Create Campaign
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {campaigns.map((campaign) => (
+                    <div
+                        key={campaign.id}
+                        className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => navigate(`/campaign/${campaign.id}`)}
+                    >
+                        {campaign.imageUrl && (
+                            <img
+                                src={campaign.imageUrl}
+                                alt={campaign.title}
+                                className="w-full h-48 object-cover"
+                            />
+                        )}
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <span
+                                    className={`px-3 py-1 rounded-full text-sm ${
+                                        campaign.status === "active"
+                                            ? "bg-green-100 text-green-800"
+                                            : "bg-yellow-100 text-yellow-800"
+                                    }`}
+                                >
+                                    {campaign.status}
+                                </span>
+                                <span className="text-sm text-gray-500">
+                                    {campaign.category}
+                                </span>
+                            </div>
+                            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                {campaign.title}
+                            </h3>
+                            <p className="text-gray-600 mb-4 line-clamp-2">
+                                {campaign.description}
+                            </p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex items-center text-gray-600">
+                                    <DollarSign className="h-5 w-5 mr-2" />
+                                    <span>{campaign.goal} ETH Goal</span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <Users className="h-5 w-5 mr-2" />
+                                    <span>
+                                        {campaign.donors?.length || 0} Donors
+                                    </span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <Clock className="h-5 w-5 mr-2" />
+                                    <span>
+                                        {new Date(
+                                            campaign.deadline
+                                        ).toLocaleDateString()}
+                                    </span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <DollarSign className="h-5 w-5 mr-2" />
+                                    <span>
+                                        {campaign.totalRaised} ETH Raised
+                                    </span>
+                                </div>
+                            </div>
+                            {campaign.tags?.length > 0 && (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    {campaign.tags.map((tag) => (
+                                        <span
+                                            key={tag}
+                                            className="px-2 py-1 bg-gray-100 text-gray-600 text-sm rounded-full"
+                                        >
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {userRole !== "ngo" && (
+                                <div className="p-4 border-t border-gray-100">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedCampaign(campaign);
+                                            setShowDonateModal(true);
+                                        }}
+                                        className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center justify-center"
+                                    >
+                                        <DollarSign className="h-5 w-5 mr-2" />
+                                        Donate Now
+                                    </button>
+                                </div>
+                            )}
+                            <div className="mt-4">
+                                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                                    <span>
+                                        {campaign.totalRaised} ETH raised
+                                    </span>
+                                    <span>{campaign.goal} ETH goal</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                    <div
+                                        className="bg-indigo-600 h-2 rounded-full"
+                                        style={{
+                                            width: `${calculateProgress(
+                                                campaign
+                                            )}%`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-2 text-sm text-gray-500">
+                                {new Date(campaign.deadline) > new Date()
+                                    ? `${Math.ceil(
+                                          (new Date(campaign.deadline) -
+                                              new Date()) /
+                                              (1000 * 60 * 60 * 24)
+                                      )} days left`
+                                    : "Campaign ended"}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {userRole === "ngo" && (
+                <CreateCampaignModal
+                    isOpen={showCreateCampaign}
+                    onClose={() => setShowCreateCampaign(false)}
+                    ngoId={ngoData?.id}
+                    onSuccess={(newCampaign) => {
+                        handleCampaignCreated(newCampaign);
+                        setShowCreateCampaign(false);
+                    }}
+                />
+            )}
+
+            {showDonateModal && selectedCampaign && (
+                <DonateModal
+                    isOpen={showDonateModal}
+                    onClose={() => {
+                        setShowDonateModal(false);
+                        setSelectedCampaign(null);
+                    }}
+                    campaign={selectedCampaign}
+                    onSuccess={handleDonationSuccess}
+                />
+            )}
         </div>
-      )}
-    </div>
-  );
-}
+    );
+};
 
 export default CampaignsNGOs;

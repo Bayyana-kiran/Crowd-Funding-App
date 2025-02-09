@@ -1,168 +1,227 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Clock, Users, Target, Share2, Heart, QrCode } from 'lucide-react';
-import QRCode from 'react-qr-code';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+    Calendar,
+    DollarSign,
+    Users,
+    Clock,
+    AlertCircle,
+    CheckCircle,
+} from "lucide-react";
+import DonateModal from "../components/campaigns/DonateModal";
 
-function CampaignDetails() {
-  const { id } = useParams();
-  const [donationAmount, setDonationAmount] = useState('');
-  const [showQR, setShowQR] = useState(false);
+const CampaignDetails = () => {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [campaign, setCampaign] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [showDonateModal, setShowDonateModal] = useState(false);
+    const [userRole, setUserRole] = useState(null);
 
-  // Mock data - In production, this would be fetched from your blockchain/API
-  const campaign = {
-    title: "Clean Water Initiative",
-    image: "https://images.unsplash.com/photo-1541372556104-51a9ea9e4139?auto=format&fit=crop&q=80",
-    description: "Providing clean and safe drinking water to communities in need. This initiative aims to install water purification systems and wells in areas where access to clean water is limited.",
-    progress: 75,
-    goal: "50,000",
-    raised: "37,500",
-    donors: 128,
-    daysLeft: 15,
-    walletAddress: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-    recentDonations: [
-      { address: "0x123...abc", amount: "5,000", timestamp: "2024-03-10" },
-      { address: "0x456...def", amount: "2,500", timestamp: "2024-03-09" },
-      { address: "0x789...ghi", amount: "1,000", timestamp: "2024-03-08" },
-    ]
-  };
+    useEffect(() => {
+        fetchCampaignData();
+    }, [id]);
 
-  const handleDonate = async () => {
-    // Implement Web3 donation logic here
-    console.log('Donating:', donationAmount);
-  };
+    const fetchCampaignData = async () => {
+        try {
+            setLoading(true);
+            const walletAddress = localStorage.getItem("account");
+            const role = localStorage.getItem("role");
+            setUserRole(role);
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Content */}
-        <div className="lg:col-span-2">
-          <img
-            src={campaign.image}
-            alt={campaign.title}
-            className="w-full h-96 object-cover rounded-lg shadow-lg"
-          />
-          
-          <h1 className="mt-6 text-3xl font-bold text-gray-900">{campaign.title}</h1>
-          
-          <div className="mt-6 flex flex-wrap gap-4">
-            <div className="flex items-center text-gray-600">
-              <Target className="h-5 w-5 mr-2" />
-              <span>Goal: ${campaign.goal}</span>
+            if (!walletAddress) {
+                throw new Error("Please connect your wallet first");
+            }
+
+            // Update the fetch URL to match the backend route
+            const response = await fetch(
+                `http://localhost:5987/api/dashboard/campaign/${id}`
+            );
+            if (!response.ok) {
+                throw new Error("Failed to fetch campaign details");
+            }
+            const campaignData = await response.json();
+            setCampaign(campaignData);
+        } catch (err) {
+            setError(err.message);
+            if (err.message.includes("wallet")) {
+                navigate("/login");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const calculateProgress = (campaign) => {
+        const raised = parseFloat(campaign.totalRaised) || 0;
+        const goal = parseFloat(campaign.goal) || 0;
+        return goal > 0 ? Math.min((raised / goal) * 100, 100) : 0;
+    };
+
+    const handleDonationSuccess = async () => {
+        await fetchCampaignData();
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
             </div>
-            <div className="flex items-center text-gray-600">
-              <Users className="h-5 w-5 mr-2" />
-              <span>{campaign.donors} Donors</span>
-            </div>
-            <div className="flex items-center text-gray-600">
-              <Clock className="h-5 w-5 mr-2" />
-              <span>{campaign.daysLeft} Days Left</span>
-            </div>
-          </div>
+        );
+    }
 
-          <div className="mt-6">
-            <div className="relative pt-1">
-              <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
-                <div
-                  style={{ width: `${campaign.progress}%` }}
-                  className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500"
-                ></div>
-              </div>
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen">
+                <div className="text-red-600 text-xl mb-4">{error}</div>
+                <button
+                    onClick={() => navigate("/login")}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                    Connect Wallet
+                </button>
             </div>
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Raised: ${campaign.raised}</span>
-              <span>{campaign.progress}%</span>
-              <span>Goal: ${campaign.goal}</span>
+        );
+    }
+
+    if (!campaign) {
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <div className="text-gray-600 text-xl">Campaign not found</div>
             </div>
-          </div>
+        );
+    }
 
-          <div className="mt-8 prose max-w-none">
-            <h2 className="text-xl font-semibold text-gray-900">About this campaign</h2>
-            <p className="mt-4 text-gray-600">{campaign.description}</p>
-          </div>
-
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Donations</h2>
-            <div className="mt-4 space-y-4">
-              {campaign.recentDonations.map((donation, index) => (
-                <div key={index} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center">
-                    <Heart className="h-5 w-5 text-red-500 mr-3" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{donation.address}</p>
-                      <p className="text-sm text-gray-500">{donation.timestamp}</p>
+    return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                {campaign.imageUrl && (
+                    <img
+                        src={campaign.imageUrl}
+                        alt={campaign.title}
+                        className="w-full h-64 object-cover"
+                    />
+                )}
+                <div className="p-8">
+                    <div className="flex items-center justify-between mb-6">
+                        <h1 className="text-3xl font-bold text-gray-900">
+                            {campaign.title}
+                        </h1>
+                        <span
+                            className={`px-3 py-1 rounded-full text-sm ${
+                                campaign.status === "active"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                            }`}
+                        >
+                            {campaign.status}
+                        </span>
                     </div>
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">${donation.amount}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* Donation Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-lg p-6 sticky top-8">
-            <h2 className="text-lg font-semibold text-gray-900">Make a Donation</h2>
-            <div className="mt-4">
-              <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
-                Amount (USD)
-              </label>
-              <div className="mt-1">
-                <input
-                  type="number"
-                  name="amount"
-                  id="amount"
-                  value={donationAmount}
-                  onChange={(e) => setDonationAmount(e.target.value)}
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  placeholder="Enter amount"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                                Campaign Details
+                            </h2>
+                            <p className="text-gray-600 whitespace-pre-wrap">
+                                {campaign.description}
+                            </p>
+                            {campaign.tags?.length > 0 && (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    {campaign.tags.map((tag) => (
+                                        <span
+                                            key={tag}
+                                            className="px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded-full"
+                                        >
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                    Campaign Progress
+                                </h3>
+                                <div className="bg-gray-200 rounded-full h-2 mb-2">
+                                    <div
+                                        className="bg-indigo-600 h-2 rounded-full"
+                                        style={{
+                                            width: `${calculateProgress(
+                                                campaign
+                                            )}%`,
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex justify-between text-sm text-gray-600">
+                                    <span>
+                                        {campaign.totalRaised} ETH raised
+                                    </span>
+                                    <span>{campaign.goal} ETH goal</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex items-center text-gray-600">
+                                    <Users className="h-5 w-5 mr-2" />
+                                    <span>
+                                        {campaign.donors?.length || 0} Donors
+                                    </span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <Calendar className="h-5 w-5 mr-2" />
+                                    <span>
+                                        {new Date(
+                                            campaign.deadline
+                                        ).toLocaleDateString()}
+                                    </span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <Clock className="h-5 w-5 mr-2" />
+                                    <span>
+                                        {new Date(campaign.deadline) > new Date()
+                                            ? `${Math.ceil(
+                                                  (new Date(campaign.deadline) -
+                                                      new Date()) /
+                                                      (1000 * 60 * 60 * 24)
+                                              )} days left`
+                                            : "Campaign ended"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center text-gray-600">
+                                    <DollarSign className="h-5 w-5 mr-2" />
+                                    <span>{campaign.category}</span>
+                                </div>
+                            </div>
+
+                            {userRole !== "ngo" &&
+                                campaign.status === "active" && (
+                                    <button
+                                        onClick={() => setShowDonateModal(true)}
+                                        className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center"
+                                    >
+                                        <DollarSign className="h-5 w-5 mr-2" />
+                                        Donate Now
+                                    </button>
+                                )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {showDonateModal && (
+                <DonateModal
+                    isOpen={showDonateModal}
+                    onClose={() => setShowDonateModal(false)}
+                    campaign={campaign}
+                    onSuccess={handleDonationSuccess}
                 />
-              </div>
-            </div>
-
-            <button
-              onClick={handleDonate}
-              className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Donate Now
-            </button>
-
-            <div className="mt-6 border-t border-gray-200 pt-4">
-              <button
-                onClick={() => setShowQR(!showQR)}
-                className="flex items-center justify-center w-full text-sm text-gray-600 hover:text-gray-900"
-              >
-                <QrCode className="h-4 w-4 mr-2" />
-                {showQR ? 'Hide' : 'Show'} QR Code
-              </button>
-              
-              {showQR && (
-                <div className="mt-4 flex flex-col items-center">
-                  <QRCode
-                    value={campaign.walletAddress}
-                    size={150}
-                    className="mb-2"
-                  />
-                  <p className="text-xs text-gray-500 break-all text-center mt-2">
-                    {campaign.walletAddress}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <button
-                className="flex items-center text-sm text-gray-600 hover:text-gray-900"
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Share Campaign
-              </button>
-            </div>
-          </div>
+            )}
         </div>
-      </div>
-    </div>
-  );
-}
+    );
+};
 
 export default CampaignDetails;
