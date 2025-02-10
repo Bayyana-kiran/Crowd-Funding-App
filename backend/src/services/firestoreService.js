@@ -10,7 +10,8 @@ import {
     orderBy,
     limit,
     addDoc,
-    arrayUnion
+    arrayUnion,
+    setDoc
 } from 'firebase/firestore';
 import EmailService from './emailService.js';
 
@@ -18,14 +19,14 @@ class FirestoreService {
     // NGO Related Operations
     async getAllNGOs() {
         try {
-            const ngoSnapshot = await getDocs(collection(db, 'ngo'));
-            return ngoSnapshot.docs.map(doc => ({
+            const snapshot = await getDocs(collection(db, 'ngo'));
+            return snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
         } catch (error) {
-            console.error('Error getting NGOs:', error);
-            throw error;
+            console.error('Error getting all NGOs:', error);
+            throw new Error(`Failed to get NGOs: ${error.message}`);
         }
     }
 
@@ -45,8 +46,7 @@ class FirestoreService {
                 ...doc.data()
             };
         } catch (error) {
-            console.error('Error getting NGO by wallet:', error);
-            throw error;
+            throw new Error(`Failed to get NGO: ${error.message}`);
         }
     }
 
@@ -164,8 +164,7 @@ class FirestoreService {
                 ...doc.data()
             }));
         } catch (error) {
-            console.error('Error getting pending NGOs:', error);
-            throw error;
+            throw new Error(`Failed to get pending NGOs: ${error.message}`);
         }
     }
 
@@ -205,54 +204,50 @@ class FirestoreService {
         }
     }
 
-    async updateNGOStatus(ngoId, status, remarks = '') {
+    async updateNGOStatus(ngoId, status) {
         try {
+            console.log('Updating NGO status in Firestore:', { ngoId, status });
+
             const ngoRef = doc(db, 'ngo', ngoId);
             const ngoDoc = await getDoc(ngoRef);
-            const ngoData = ngoDoc.data();
+
+            if (!ngoDoc.exists) {
+                console.log('NGO not found:', ngoId);
+                return null;
+            }
 
             await updateDoc(ngoRef, {
                 status: status,
-                remarks: remarks,
-                updatedAt: new Date().toISOString(),
-                verifiedAt: status === 'approved' ? new Date().toISOString() : null
+                updatedAt: new Date().toISOString()
             });
 
-            // Send email notification
-            if (status === 'approved' || status === 'rejected') {
-                await EmailService.sendVerificationEmail(
-                    { ...ngoData, id: ngoId },
-                    status,
-                    remarks
-                );
-            }
-
-            return true;
+            // Get the updated document
+            const updatedDoc = await getDoc(ngoRef);
+            return {
+                id: updatedDoc.id,
+                ...updatedDoc.data()
+            };
         } catch (error) {
             console.error('Error updating NGO status:', error);
-            throw error;
+            throw new Error(`Failed to update NGO status: ${error.message}`);
         }
     }
 
     async getAdminDashboardStats() {
         try {
-            const [ngos, campaigns, donations] = await Promise.all([
+            const [ngos, donations] = await Promise.all([
                 this.getAllNGOs(),
-                this.getAllCampaigns(),
                 this.getAllDonations()
             ]);
 
             return {
                 totalNGOs: ngos.length,
                 pendingApprovals: ngos.filter(ngo => ngo.status === 'pending').length,
-                totalFundsRaised: donations.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0),
-                activeNGOs: ngos.filter(ngo => ngo.status === 'approved').length,
-                totalCampaigns: campaigns.length,
-                activeCampaigns: campaigns.filter(c => c.status === 'active').length
+                totalFundsRaised: donations.reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0),
+                activeNGOs: ngos.filter(ngo => ngo.status === 'approved').length
             };
         } catch (error) {
-            console.error('Error getting admin dashboard stats:', error);
-            throw error;
+            throw new Error(`Failed to get admin stats: ${error.message}`);
         }
     }
 
@@ -282,8 +277,7 @@ class FirestoreService {
                 ...doc.data()
             }));
         } catch (error) {
-            console.error('Error getting recent NGO registrations:', error);
-            throw error;
+            throw new Error(`Failed to get recent registrations: ${error.message}`);
         }
     }
 
@@ -300,15 +294,14 @@ class FirestoreService {
                 ...doc.data()
             }));
         } catch (error) {
-            console.error('Error getting recent donations:', error);
-            throw error;
+            throw new Error(`Failed to get recent donations: ${error.message}`);
         }
     }
 
     async createCampaign(campaignData) {
         try {
             // Validate required fields
-            const requiredFields = ['title', 'description', 'goal', 'deadline', 'ngoId'];
+            const requiredFields = ['id', 'title', 'description', 'goal', 'ngoId'];
             for (const field of requiredFields) {
                 if (!campaignData[field]) {
                     throw new Error(`${field} is required`);
@@ -321,7 +314,6 @@ class FirestoreService {
                 goal: parseFloat(campaignData.goal),
                 status: 'active',
                 createdAt: new Date().toISOString(),
-                deadline: new Date(campaignData.deadline).toISOString(),
                 totalRaised: 0,
                 donors: [],
                 imageUrl: campaignData.imageUrl || '',
@@ -331,9 +323,12 @@ class FirestoreService {
                 lastUpdated: new Date().toISOString()
             };
 
-            const campaignRef = await addDoc(collection(db, 'campaigns'), campaign);
+            // Use blockchain campaign ID as Firestore document ID
+            const campaignRef = doc(db, 'campaigns', campaignData.id);
+            await setDoc(campaignRef, campaign);
+
             return {
-                id: campaignRef.id,
+                id: campaignData.id,
                 ...campaign
             };
         } catch (error) {
@@ -344,18 +339,25 @@ class FirestoreService {
 
     async createDonation(donationData) {
         try {
-            // Update campaign total raised amount
+            // Update campaign total raised amount using the value from blockchain
             const campaignRef = doc(db, 'campaigns', donationData.campaignId);
             const campaignDoc = await getDoc(campaignRef);
-            const campaign = campaignDoc.data();
+
+            if (!campaignDoc.exists()) {
+                throw new Error('Campaign not found in Firestore');
+            }
 
             await updateDoc(campaignRef, {
-                totalRaised: parseFloat(campaign.totalRaised || 0) + parseFloat(donationData.amount),
-                donors: arrayUnion(donationData.donorWallet)
+                totalRaised: donationData.totalRaised,
+                donors: arrayUnion(donationData.donor)
             });
 
             // Create donation record
-            const donationRef = await addDoc(collection(db, 'donations'), donationData);
+            const donationRef = await addDoc(collection(db, 'donations'), {
+                ...donationData,
+                timestamp: new Date().toISOString()
+            });
+
             return {
                 id: donationRef.id,
                 ...donationData
@@ -401,6 +403,55 @@ class FirestoreService {
             };
         } catch (error) {
             console.error('Error getting campaign by ID:', error);
+            throw error;
+        }
+    }
+
+    // NGO Registration
+    async createNGO(ngoData) {
+        try {
+            const docRef = await addDoc(collection(db, 'ngo'), {
+                ...ngoData,
+                status: 'pending',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+
+            return {
+                id: docRef.id,
+                ...ngoData,
+                status: 'pending'
+            };
+        } catch (error) {
+            throw new Error(`Failed to create NGO: ${error.message}`);
+        }
+    }
+
+    // Add this method to get NGO by ID
+    async getNGOById(ngoId) {
+        try {
+            const ngoDoc = await getDoc(doc(db, 'ngo', ngoId));
+            if (!ngoDoc.exists()) return null;
+
+            return {
+                id: ngoDoc.id,
+                ...ngoDoc.data()
+            };
+        } catch (error) {
+            throw new Error(`Failed to get NGO: ${error.message}`);
+        }
+    }
+
+    // Add this method to create withdrawal record
+    async createWithdrawal(withdrawalData) {
+        try {
+            const withdrawalRef = await addDoc(collection(db, 'withdrawals'), withdrawalData);
+            return {
+                id: withdrawalRef.id,
+                ...withdrawalData
+            };
+        } catch (error) {
+            console.error('Error creating withdrawal:', error);
             throw error;
         }
     }

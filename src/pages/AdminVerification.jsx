@@ -7,6 +7,7 @@ import {
     User,
     AlertCircle,
 } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 function AdminVerification() {
     const [searchTerm, setSearchTerm] = useState("");
@@ -38,31 +39,41 @@ function AdminVerification() {
     const handleStatusUpdate = async (ngoId, newStatus) => {
         try {
             setLoading(true);
-            const remarks = prompt('Enter remarks for the NGO (optional):');
-            
+            console.log("Updating NGO status:", { ngoId, newStatus });
+
             const response = await fetch(
                 `http://localhost:5987/api/dashboard/admin/ngos/${ngoId}/status`,
                 {
-                    method: 'PUT',
+                    method: "PUT",
                     headers: {
-                        'Content-Type': 'application/json',
+                        "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({
-                        status: newStatus,
-                        remarks: remarks || ''
-                    }),
+                    body: JSON.stringify({ status: newStatus }),
                 }
             );
 
             if (!response.ok) {
-                throw new Error('Failed to update NGO status');
+                const errorData = await response.json();
+                throw new Error(
+                    errorData.error || "Failed to update NGO status"
+                );
             }
 
-            // Refresh the NGO list
-            fetchNGOs();
+            const updatedNGO = await response.json();
+            console.log("NGO status updated:", updatedNGO);
+
+            // Update the NGO list
+            setNgos((currentNGOs) =>
+                currentNGOs.map((ngo) =>
+                    ngo.id === ngoId ? { ...ngo, status: newStatus } : ngo
+                )
+            );
+
+            // Show success message
+            toast.success(`NGO status updated to ${newStatus}`);
         } catch (error) {
-            console.error('Error updating NGO status:', error);
-            setError(error.message);
+            console.error("Error updating NGO status:", error);
+            toast.error(error.message);
         } finally {
             setLoading(false);
         }

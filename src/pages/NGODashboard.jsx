@@ -10,12 +10,14 @@ import {
     Calendar,
     TrendingUp,
     Plus,
+    AlertCircle,
 } from "lucide-react";
 import CreateCampaignModal from "../components/campaigns/CreateCampaignModal";
+import { toast } from "react-hot-toast";
 
 const NGODashboard = () => {
     const navigate = useNavigate();
-    const [ngoData, setNgoData] = useState(null);
+    const [ngo, setNgo] = useState(null);
     const [campaigns, setCampaigns] = useState([]);
     const [donations, setDonations] = useState([]);
     const [withdrawals, setWithdrawals] = useState([]);
@@ -25,85 +27,115 @@ const NGODashboard = () => {
     const [stats, setStats] = useState([]);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
+        const checkNGOStatus = async () => {
             try {
-                setLoading(true);
-                const walletAddress = localStorage.getItem("account");
-                if (!walletAddress) {
-                    throw new Error("Please connect your wallet first");
-                }
+                const accounts = await window.ethereum.request({
+                    method: "eth_requestAccounts",
+                });
+                const walletAddress = accounts[0];
 
-                // Fetch NGO data
-                const ngoResponse = await fetch(
+                const response = await fetch(
                     `http://localhost:5987/api/dashboard/ngo/${walletAddress}`
                 );
-                if (!ngoResponse.ok) {
-                    throw new Error("Failed to fetch NGO data");
+
+                if (!response.ok) {
+                    throw new Error("Failed to fetch NGO details");
                 }
-                const ngoData = await ngoResponse.json();
-                setNgoData(ngoData);
+
+                const ngoData = await response.json();
+                setNgo(ngoData);
+
+                // Redirect if NGO is rejected
+                if (ngoData.status === "rejected") {
+                    toast.error(
+                        "Your NGO registration has been rejected. Please contact support."
+                    );
+                    navigate("/");
+                    return;
+                }
 
                 // Fetch all related data
-                const [campaignsRes, donationsRes, withdrawalsRes] = await Promise.all([
-                    fetch(`http://localhost:5987/api/dashboard/campaigns/ngo/${ngoData.id}`),
-                    fetch(`http://localhost:5987/api/dashboard/donations/ngo/${ngoData.id}`),
-                    fetch(`http://localhost:5987/api/dashboard/withdrawals/${ngoData.id}`)
-                ]);
+                const [campaignsRes, donationsRes, withdrawalsRes] =
+                    await Promise.all([
+                        fetch(
+                            `http://localhost:5987/api/dashboard/campaigns/ngo/${ngoData.id}`
+                        ),
+                        fetch(
+                            `http://localhost:5987/api/dashboard/donations/ngo/${ngoData.id}`
+                        ),
+                        fetch(
+                            `http://localhost:5987/api/dashboard/withdrawals/${ngoData.id}`
+                        ),
+                    ]);
 
-                const [campaignsData, donationsData, withdrawalsData] = await Promise.all([
-                    campaignsRes.json(),
-                    donationsRes.json(),
-                    withdrawalsRes.json()
-                ]);
+                const [campaignsData, donationsData, withdrawalsData] =
+                    await Promise.all([
+                        campaignsRes.json(),
+                        donationsRes.json(),
+                        withdrawalsRes.json(),
+                    ]);
 
-                setCampaigns(campaignsData);
-                setDonations(donationsData);
-                setWithdrawals(withdrawalsData);
+                setCampaigns(campaignsData || []);
+                setDonations(donationsData || []);
+                setWithdrawals(withdrawalsData || []);
 
                 // Calculate real stats
-                const stats = [
+                const statsData = [
                     {
                         name: "Total Raised",
-                        value: `${donationsData.reduce((acc, curr) => acc + parseFloat(curr.amount), 0)} ETH`,
+                        value: `${(donationsData || []).reduce(
+                            (acc, curr) => acc + parseFloat(curr.amount || 0),
+                            0
+                        )} ETH`,
                         icon: DollarSign,
-                        change: `${donationsData.length} donations received`
+                        change: `${
+                            donationsData?.length || 0
+                        } donations received`,
                     },
                     {
                         name: "Total Donors",
-                        value: new Set(donationsData.map(d => d.donorWallet)).size,
+                        value: new Set(
+                            (donationsData || []).map((d) => d.donorWallet)
+                        ).size,
                         icon: Users,
-                        change: "Unique donors"
+                        change: "Unique donors",
                     },
                     {
                         name: "Active Campaigns",
-                        value: campaignsData.filter(c => c.status === 'active').length,
+                        value: (campaignsData || []).filter(
+                            (c) => c.status === "active"
+                        ).length,
                         icon: BarChart3,
-                        change: `${campaignsData.length} total campaigns`
+                        change: `${campaignsData?.length || 0} total campaigns`,
                     },
                     {
                         name: "Total Withdrawn",
-                        value: `${withdrawalsData.reduce((acc, curr) => acc + parseFloat(curr.amount), 0)} ETH`,
+                        value: `${(withdrawalsData || []).reduce(
+                            (acc, curr) => acc + parseFloat(curr.amount || 0),
+                            0
+                        )} ETH`,
                         icon: Download,
-                        change: `${withdrawalsData.length} withdrawals processed`
-                    }
+                        change: `${
+                            withdrawalsData?.length || 0
+                        } withdrawals processed`,
+                    },
                 ];
 
-                setStats(stats);
-            } catch (err) {
-                setError(err.message);
-                if (err.message.includes("wallet")) {
-                    navigate("/login");
-                }
+                setStats(statsData);
+            } catch (error) {
+                console.error("Error fetching NGO data:", error);
+                setError(error.message);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchDashboardData();
+        checkNGOStatus();
     }, [navigate]);
 
     const handleCampaignCreated = (newCampaign) => {
-        setCampaigns([newCampaign, ...campaigns]);
+        setCampaigns((prev) => [...prev, newCampaign]);
+        setShowCreateCampaign(false);
     };
 
     if (loading) {
@@ -128,6 +160,32 @@ const NGODashboard = () => {
         );
     }
 
+    if (ngo?.status === "pending") {
+        return (
+            <div className="max-w-7xl mx-auto px-4 py-8">
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <AlertCircle className="h-5 w-5 text-yellow-400" />
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-yellow-800">
+                                Verification Pending
+                            </h3>
+                            <div className="mt-2 text-sm text-yellow-700">
+                                <p>
+                                    Your NGO registration is currently under
+                                    review. You'll be able to create campaigns
+                                    once your registration is approved.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* NGO Profile Header */}
@@ -135,12 +193,12 @@ const NGODashboard = () => {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">
-                            {ngoData?.name}
+                            {ngo?.name}
                         </h1>
-                        <p className="text-gray-500 mt-1">{ngoData?.email}</p>
+                        <p className="text-gray-500 mt-1">{ngo?.email}</p>
                         <p className="text-sm text-gray-500 mt-2">
-                            Wallet: {ngoData?.walletAddress?.slice(0, 6)}...
-                            {ngoData?.walletAddress?.slice(-4)}
+                            Wallet: {ngo?.walletAddress?.slice(0, 6)}...
+                            {ngo?.walletAddress?.slice(-4)}
                         </p>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -153,12 +211,12 @@ const NGODashboard = () => {
                         </button>
                         <span
                             className={`px-3 py-1 rounded-full text-sm ${
-                                ngoData?.status === "approved"
+                                ngo?.status === "approved"
                                     ? "bg-green-100 text-green-800"
                                     : "bg-yellow-100 text-yellow-800"
                             }`}
                         >
-                            {ngoData?.status}
+                            {ngo?.status}
                         </span>
                     </div>
                 </div>
@@ -203,7 +261,7 @@ const NGODashboard = () => {
                         </h2>
                     </div>
                     <div className="divide-y divide-gray-100">
-                        {donations.slice(0, 5).map((donation) => (
+                        {(donations || []).slice(0, 5).map((donation) => (
                             <div
                                 key={donation.id}
                                 className="p-6 hover:bg-gray-50"
@@ -211,9 +269,9 @@ const NGODashboard = () => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-sm font-medium text-gray-900">
-                                            {donation.donorWallet.slice(0, 6)}
+                                            {donation.donorWallet?.slice(0, 6)}
                                             ...
-                                            {donation.donorWallet.slice(-4)}
+                                            {donation.donorWallet?.slice(-4)}
                                         </p>
                                         <p className="text-sm text-gray-500">
                                             {new Date(
@@ -238,7 +296,7 @@ const NGODashboard = () => {
                         </h2>
                     </div>
                     <div className="divide-y divide-gray-100">
-                        {withdrawals.slice(0, 5).map((withdrawal) => (
+                        {(withdrawals || []).slice(0, 5).map((withdrawal) => (
                             <div
                                 key={withdrawal.id}
                                 className="p-6 hover:bg-gray-50"
@@ -282,7 +340,7 @@ const NGODashboard = () => {
             <CreateCampaignModal
                 isOpen={showCreateCampaign}
                 onClose={() => setShowCreateCampaign(false)}
-                ngoId={ngoData?.id}
+                ngoId={ngo?.id}
                 onSuccess={handleCampaignCreated}
             />
         </div>

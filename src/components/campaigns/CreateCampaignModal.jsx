@@ -1,30 +1,31 @@
-import React, { useState } from 'react';
-import { X, Upload, AlertCircle } from 'lucide-react';
+import React, { useState } from "react";
+import { X, Upload, AlertCircle } from "lucide-react";
 
 const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
     const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        goal: '',
-        deadline: '',
-        imageUrl: '',
-        category: 'Education',
+        title: "",
+        description: "",
+        goal: "",
+        startDate: "",
+        deadline: "",
+        imageUrl: "",
+        category: "Other",
         tags: [],
-        ngoId: ngoId
+        ngoId: ngoId,
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [currentTag, setCurrentTag] = useState('');
+    const [currentTag, setCurrentTag] = useState("");
 
     const categories = [
-        'Education',
-        'Healthcare',
-        'Environment',
-        'Poverty',
-        'Disaster Relief',
-        'Animal Welfare',
-        'Community',
-        'Other'
+        "Education",
+        "Healthcare",
+        "Environment",
+        "Poverty",
+        "Disaster Relief",
+        "Animal Welfare",
+        "Community",
+        "Other",
     ];
 
     const addTag = (e) => {
@@ -32,16 +33,16 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
         if (currentTag && !formData.tags.includes(currentTag)) {
             setFormData({
                 ...formData,
-                tags: [...formData.tags, currentTag]
+                tags: [...formData.tags, currentTag],
             });
-            setCurrentTag('');
+            setCurrentTag("");
         }
     };
 
     const removeTag = (tagToRemove) => {
         setFormData({
             ...formData,
-            tags: formData.tags.filter(tag => tag !== tagToRemove)
+            tags: formData.tags.filter((tag) => tag !== tagToRemove),
         });
     };
 
@@ -51,24 +52,64 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
             setLoading(true);
             setError(null);
 
-            const response = await fetch('http://localhost:5987/api/dashboard/campaigns/create', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
+            // Validate dates
+            const startDate = new Date(formData.startDate);
+            const endDate = new Date(formData.deadline);
+            const minStartDate = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
+            if (startDate < minStartDate) {
+                throw new Error(
+                    "Start date must be at least 5 minutes in the future"
+                );
+            }
+
+            if (endDate <= startDate) {
+                throw new Error("End date must be after start date");
+            }
+
+            // Get NGO's wallet address
+            const accounts = await window.ethereum.request({
+                method: "eth_requestAccounts",
             });
+            const ngoAddress = accounts[0];
+
+            // Format the data
+            const campaignData = {
+                title: formData.title,
+                description: formData.description,
+                goal: parseFloat(formData.goal),
+                startDate: startDate.toISOString(),
+                deadline: endDate.toISOString(),
+                ngoAddress,
+                category: formData.category,
+                tags: formData.tags,
+                imageUrl: formData.imageUrl || "",
+            };
+
+            console.log("Submitting campaign data:", campaignData);
+
+            const response = await fetch(
+                "http://localhost:5987/api/dashboard/campaigns/create",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(campaignData),
+                }
+            );
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to create campaign');
+                throw new Error(errorData.error || "Failed to create campaign");
             }
 
             const campaign = await response.json();
             onSuccess(campaign);
             onClose();
-        } catch (err) {
-            setError(err.message);
+        } catch (error) {
+            console.error("Error creating campaign:", error);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -80,9 +121,11 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-xl w-full max-w-3xl my-8">
                 <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                    <h2 className="text-2xl font-bold text-gray-900">Create New Campaign</h2>
-                    <button 
-                        onClick={onClose} 
+                    <h2 className="text-2xl font-bold text-gray-900">
+                        Create New Campaign
+                    </h2>
+                    <button
+                        onClick={onClose}
                         className="text-gray-400 hover:text-gray-500 transition-colors"
                     >
                         <X className="h-6 w-6" />
@@ -107,7 +150,12 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                     type="text"
                                     required
                                     value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            title: e.target.value,
+                                        })
+                                    }
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                     placeholder="Enter campaign title"
                                 />
@@ -120,10 +168,15 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                 <select
                                     required
                                     value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            category: e.target.value,
+                                        })
+                                    }
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                 >
-                                    {categories.map(category => (
+                                    {categories.map((category) => (
                                         <option key={category} value={category}>
                                             {category}
                                         </option>
@@ -141,7 +194,12 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                     required
                                     min="0"
                                     value={formData.goal}
-                                    onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            goal: e.target.value,
+                                        })
+                                    }
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                     placeholder="0.00"
                                 />
@@ -149,14 +207,45 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Deadline *
+                                    Start Date *
                                 </label>
                                 <input
-                                    type="date"
+                                    type="datetime-local"
                                     required
-                                    min={new Date().toISOString().split('T')[0]}
+                                    min={new Date(Date.now() + 5 * 60 * 1000)
+                                        .toISOString()
+                                        .slice(0, 16)}
+                                    value={formData.startDate}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            startDate: e.target.value,
+                                        })
+                                    }
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    End Date *
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    required
+                                    min={
+                                        formData.startDate ||
+                                        new Date(Date.now() + 5 * 60 * 1000)
+                                            .toISOString()
+                                            .slice(0, 16)
+                                    }
                                     value={formData.deadline}
-                                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            deadline: e.target.value,
+                                        })
+                                    }
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                 />
                             </div>
@@ -170,7 +259,12 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                 <textarea
                                     required
                                     value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            description: e.target.value,
+                                        })
+                                    }
                                     rows={4}
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                     placeholder="Describe your campaign..."
@@ -184,7 +278,12 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                 <input
                                     type="url"
                                     value={formData.imageUrl}
-                                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            imageUrl: e.target.value,
+                                        })
+                                    }
                                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                     placeholder="https://example.com/image.jpg"
                                 />
@@ -198,7 +297,9 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                     <input
                                         type="text"
                                         value={currentTag}
-                                        onChange={(e) => setCurrentTag(e.target.value)}
+                                        onChange={(e) =>
+                                            setCurrentTag(e.target.value)
+                                        }
                                         className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                                         placeholder="Add a tag"
                                     />
@@ -211,7 +312,7 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                                     </button>
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-2">
-                                    {formData.tags.map(tag => (
+                                    {formData.tags.map((tag) => (
                                         <span
                                             key={tag}
                                             className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800"
@@ -246,14 +347,29 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
                         >
                             {loading ? (
                                 <>
-                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    <svg
+                                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
                                     </svg>
                                     Creating...
                                 </>
                             ) : (
-                                'Create Campaign'
+                                "Create Campaign"
                             )}
                         </button>
                     </div>
@@ -263,4 +379,4 @@ const CreateCampaignModal = ({ isOpen, onClose, ngoId, onSuccess }) => {
     );
 };
 
-export default CreateCampaignModal; 
+export default CreateCampaignModal;

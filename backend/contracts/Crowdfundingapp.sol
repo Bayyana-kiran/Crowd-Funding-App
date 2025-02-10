@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.0;
 
 contract Crowdfundingapp {
     struct Campaign {
@@ -15,9 +15,14 @@ contract Crowdfundingapp {
         bool isActive;
     }
 
+    struct CampaignWithId {
+        bytes32 campaignId;
+        Campaign campaign;
+    }
+
     mapping(bytes32 => Campaign) public campaigns;
     mapping(bytes32 => mapping(address => uint256)) public donations;
-    uint256 public campaignCount;
+    bytes32[] public activeCampaignIds;
 
     event CampaignCreated(bytes32 indexed campaignId, address indexed ngoAdmin, string name);
     event CampaignUpdated(bytes32 indexed campaignId, string name, string description, uint256 goalAmount, uint256 startDate, uint256 endDate);
@@ -40,37 +45,38 @@ contract Crowdfundingapp {
         _;
     }
 
-    // Function to create a new campaign with starting and ending date
     function createCampaign(
         string memory _name,
         string memory _description,
         uint256 _goalAmount,
-        uint256 _startDate, // Starting date of the campaign
-        uint256 _endDate   // Ending date of the campaign
-    ) external {
-        require(_goalAmount > 0, "Goal amount must be greater than zero");
-        require(_startDate > block.timestamp, "Start date must be in the future");
+        uint256 _startDate,
+        uint256 _endDate
+    ) public {
+        require(_startDate > block.timestamp + 300, "Start date must be at least 5 minutes in the future");
         require(_endDate > _startDate, "End date must be after start date");
+        require(_goalAmount > 0, "Goal amount must be greater than 0");
 
-        bytes32 campaignId = keccak256(abi.encodePacked(campaignCount));
-        campaigns[campaignId] = Campaign(
-            msg.sender, 
-            _name, 
-            _description, 
-            _goalAmount, 
-            0, 
-            _startDate, 
-            _endDate, 
-            false, 
-            false, 
-            true
+        bytes32 campaignId = keccak256(
+            abi.encodePacked(_name, msg.sender, block.timestamp)
         );
-        
+
+        campaigns[campaignId] = Campaign({
+            ngoAdmin: msg.sender,
+            name: _name,
+            description: _description,
+            goalAmount: _goalAmount,
+            fundsRaised: 0,
+            startDate: _startDate,
+            endDate: _endDate,
+            isPaused: false,
+            isWithdrawn: false,
+            isActive: true
+        });
+
+        activeCampaignIds.push(campaignId);
         emit CampaignCreated(campaignId, msg.sender, _name);
-        campaignCount++;
     }
 
-    // Function to update an existing campaign with new details
     function updateCampaign(
         bytes32 _campaignId, 
         uint256 _goalAmount, 
@@ -97,109 +103,102 @@ contract Crowdfundingapp {
         );
     }
 
-    // Function to pause a campaign
-    function pauseCampaign(bytes32 _campaignId) external onlyNGOAdmin(_campaignId) campaignExists(_campaignId) {
-        campaigns[_campaignId].isPaused = true;
+    function pauseCampaign(bytes32 _campaignId) public {
+        Campaign storage campaign = campaigns[_campaignId];
+        require(msg.sender == campaign.ngoAdmin, "Only NGO admin can pause");
+        require(!campaign.isPaused, "Campaign already paused");
+        campaign.isPaused = true;
         emit CampaignPaused(_campaignId);
     }
 
-    // Function to resume a paused campaign
-    function resumeCampaign(bytes32 _campaignId) external onlyNGOAdmin(_campaignId) campaignExists(_campaignId) {
-        campaigns[_campaignId].isPaused = false;
+    function resumeCampaign(bytes32 _campaignId) public {
+        Campaign storage campaign = campaigns[_campaignId];
+        require(msg.sender == campaign.ngoAdmin, "Only NGO admin can resume");
+        require(campaign.isPaused, "Campaign not paused");
+        campaign.isPaused = false;
         emit CampaignResumed(_campaignId);
     }
 
-    // Function to donate to a campaign
-    function donate(bytes32 _campaignId) external payable campaignExists(_campaignId) {
+    function donate(bytes32 _campaignId) public payable {
         Campaign storage campaign = campaigns[_campaignId];
+        require(campaign.ngoAdmin != address(0), "Campaign does not exist");
+        require(campaign.isActive, "Campaign is not active");
         require(!campaign.isPaused, "Campaign is paused");
-        require(block.timestamp >= campaign.startDate, "Campaign has not started yet"); // Check if the current time is after the start date
-        require(block.timestamp <= campaign.endDate, "Campaign has ended"); // Check if the current time is before the end date
-        
+        require(block.timestamp >= campaign.startDate, "Campaign has not started");
+        require(block.timestamp <= campaign.endDate, "Campaign has ended");
+        require(msg.value > 0, "Donation amount must be greater than 0");
+
         campaign.fundsRaised += msg.value;
         donations[_campaignId][msg.sender] += msg.value;
+
         emit DonationReceived(_campaignId, msg.sender, msg.value);
     }
 
-    // Function for the NGO to withdraw funds after the campaign ends
-    function withdrawFunds(bytes32 _campaignId) external onlyNGOAdmin(_campaignId) campaignExists(_campaignId) {
+    function withdrawFunds(bytes32 _campaignId) public {
         Campaign storage campaign = campaigns[_campaignId];
-        require(block.timestamp > campaign.endDate, "Campaign is still running");
-        require(campaign.fundsRaised >= campaign.goalAmount, "Goal not met");
+        require(msg.sender == campaign.ngoAdmin, "Only NGO admin can withdraw");
         require(!campaign.isWithdrawn, "Funds already withdrawn");
-        
+        require(campaign.fundsRaised > 0, "No funds to withdraw");
+
         campaign.isWithdrawn = true;
         payable(campaign.ngoAdmin).transfer(campaign.fundsRaised);
         emit FundsWithdrawn(_campaignId);
     }
 
-    // Function to issue refunds to donors if the campaign fails
     function refundDonors(bytes32 _campaignId) external onlyNGOAdmin(_campaignId) campaignExists(_campaignId) {
         Campaign storage campaign = campaigns[_campaignId];
         require(block.timestamp > campaign.endDate, "Campaign is still running");
+        require(!campaign.isWithdrawn, "Funds have already been withdrawn");
+        require(campaign.fundsRaised > 0, "No funds to refund");
 
-        // Loop through all donors for this campaign
-        for (uint256 i = 0; i < campaignCount; i++) {
-            address donor = msg.sender;
-            uint256 amount = donations[_campaignId][donor];
-            if (amount > 0) {
-                donations[_campaignId][donor] = 0;
-                payable(donor).transfer(amount);
-                emit RefundIssued(_campaignId, donor, amount);
-            }
-        }
+        // Mark campaign as withdrawn to prevent further refunds
+        campaign.isWithdrawn = true;
+
+        // Get the total amount to refund
+        uint256 totalAmount = campaign.fundsRaised;
+        
+        // Reset campaign funds
+        campaign.fundsRaised = 0;
+
+        // Transfer funds back to NGO admin who will handle refunds
+        payable(campaign.ngoAdmin).transfer(totalAmount);
+        
+        // Emit refund event
+        emit RefundIssued(_campaignId, campaign.ngoAdmin, totalAmount);
     }
 
-    // Function to get the current balance of a campaign
     function getCampaignBalance(bytes32 _campaignId) external view campaignExists(_campaignId) returns (uint256) {
         return campaigns[_campaignId].fundsRaised;
     }
 
-    // Function to remove a campaign (set it as inactive)
     function removeCampaign(bytes32 _campaignId) external onlyNGOAdmin(_campaignId) campaignExists(_campaignId) {
         campaigns[_campaignId].isActive = false;
         emit CampaignRemoved(_campaignId);
     }
 
-    // New function to return all active campaigns
-    // Define a new struct to include campaignId
-struct CampaignWithId {
-    bytes32 campaignId;
-    Campaign campaign;
-}
-
-function getAllActiveCampaigns() external view returns (CampaignWithId[] memory) {
-    uint256 activeCount = 0;
-
-    // First, count how many active campaigns exist
-    for (uint256 i = 0; i < campaignCount; i++) {
-        bytes32 campaignId = keccak256(abi.encodePacked(i));
-        if (campaigns[campaignId].isActive) {
-            activeCount++;
+    function getAllActiveCampaigns() public view returns (CampaignWithId[] memory) {
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < activeCampaignIds.length; i++) {
+            if (campaigns[activeCampaignIds[i]].isActive) {
+                activeCount++;
+            }
         }
-    }
 
-    // Create an array to store active campaigns along with their IDs
-    CampaignWithId[] memory activeCampaigns = new CampaignWithId[](activeCount);
-    uint256 index = 0;
+        CampaignWithId[] memory activeCampaigns = new CampaignWithId[](activeCount);
+        uint256 currentIndex = 0;
 
-    // Populate the array with active campaigns
-    for (uint256 i = 0; i < campaignCount; i++) {
-        bytes32 campaignId = keccak256(abi.encodePacked(i));
-        if (campaigns[campaignId].isActive) {
-            activeCampaigns[index] = CampaignWithId({
-                campaignId: campaignId,
-                campaign: campaigns[campaignId]
-            });
-            index++;
+        for (uint256 i = 0; i < activeCampaignIds.length; i++) {
+            bytes32 campaignId = activeCampaignIds[i];
+            Campaign storage campaign = campaigns[campaignId];
+            if (campaign.isActive) {
+                activeCampaigns[currentIndex] = CampaignWithId(campaignId, campaign);
+                currentIndex++;
+            }
         }
+
+        return activeCampaigns;
     }
 
-    return activeCampaigns;
-    }
-
-
-    // Transfer function with checks for security
     function transferToAddress(address payable _recipient) external payable {
         require(_recipient != address(0), "Invalid recipient address");
         require(msg.value > 0, "Amount must be greater than zero");
@@ -207,5 +206,13 @@ function getAllActiveCampaigns() external view returns (CampaignWithId[] memory)
         // Transfer funds after checking conditions
         _recipient.transfer(msg.value);
         emit TransferToAddress(msg.sender, _recipient, msg.value);
+    }
+
+    function getCampaignFundsRaised(bytes32 _campaignId) public view returns (uint256) {
+        return campaigns[_campaignId].fundsRaised;
+    }
+
+    function getDonationAmount(bytes32 _campaignId, address _donor) public view returns (uint256) {
+        return donations[_campaignId][_donor];
     }
 }

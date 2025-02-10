@@ -1,7 +1,11 @@
 import express from 'express';
 import cors from 'cors';
-import fileRoutes from './routes/fileRoutes.js';
+import dotenv from 'dotenv';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import fileRoutes from './routes/fileRoutes.js';
+
+dotenv.config();
 
 const app = express();
 
@@ -16,9 +20,10 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Routes
+// Routes - Order matters!
+app.use('/api/dashboard/admin', adminRoutes);  // Put admin routes first
+app.use('/api/dashboard', dashboardRoutes);    // Then general dashboard routes
 app.use('/api/files', fileRoutes);
-app.use('/api/dashboard', dashboardRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -30,7 +30,7 @@ function App() {
               <Route path="/login" element={<MetaMaskLogin />} />
               <Route path="/admin" element={<AdminVerification />} />
               <Route path="/campaigns" element={<Campaigns />} />
-              <Route path="/campaign/:id" element={<CampaignDetails />} />
+              <Route path="/campaigns/:id" element={<CampaignDetails />} />
               <Route path="/ngo/register" element={<NGORegistration />} />
               <Route path="/ngo-dashboard" element={<NGODashboard />} />
               <Route path="/user-dashboard" element={<UserDashboard />} />

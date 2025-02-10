@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Web3 from "web3";
-// import { db, collection, addDoc } from "../firebase/firebase";
+import { db, collection, addDoc } from "../config/firebase";
 import {
     CheckCircle,
     AlertCircle,
@@ -20,6 +20,7 @@ import {
     UserPlus,
     Upload,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function NGORegistration() {
     const [walletConnected, setWalletConnected] = useState(false);
@@ -50,6 +51,7 @@ function NGORegistration() {
             },
         ],
     });
+    const navigate = useNavigate();
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -165,69 +167,54 @@ function NGORegistration() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
-        setError("");
-
         try {
-            const requiredFiles = [
-                "registrationCertificate",
-                "panNGO",
-                "annualReport",
-                "legalFinanceDocs",
-            ];
+            setSubmitting(true);
+            setError(null);
 
-            // Create a single FormData with all files
-            const fileFormData = new FormData();
-            fileFormData.append("darpanId", formData.uniqueDarpanId);
-
-            // Add all files to formData
-            let allFilesPresent = true;
-            requiredFiles.forEach((fileType) => {
-                const fileInput = document.querySelector(
-                    `input[type="file"][data-type="${fileType}"]`
-                );
-                if (fileInput && fileInput.files[0]) {
-                    fileFormData.append(fileType, fileInput.files[0]);
-                } else {
-                    allFilesPresent = false;
-                }
+            // Get wallet address
+            const accounts = await window.ethereum.request({
+                method: "eth_requestAccounts",
             });
+            const walletAddress = accounts[0];
 
-            if (!allFilesPresent) {
-                throw new Error("Please select all required files");
-            }
-
-            // Single upload request for all files
-            const response = await fetch(
-                "http://localhost:5987/api/files/upload",
-                {
-                    method: "POST",
-                    body: fileFormData,
-                }
+            // Create a clean version of the data without File objects
+            const cleanFounderDetails = formData.founderDetails.map(
+                (founder) => ({
+                    name: founder.name,
+                    position: founder.role,
+                    email: founder.email,
+                    phone: founder.phone,
+                    // Remove the File object
+                    idProofUrl: "", // You can add the URL later if needed
+                })
             );
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Failed to upload files");
-            }
-
-            const data = await response.json();
-
-            // Create final data object with all file URLs
-            const finalData = {
-                ...formData,
-                ...data.fileUrls, // Backend will return all file URLs
+            // Create clean NGO data without File objects
+            const ngoData = {
+                name: formData.name,
+                uniqueDarpanId: formData.uniqueDarpanId,
+                email: formData.ngoEmail,
+                phone: formData.phone,
+                address: formData.address,
+                website: formData.website,
+                socialLinks: {
+                    linkedin: formData.linkedin,
+                    instagram: formData.instagram,
+                },
+                founderDetails: cleanFounderDetails,
+                walletAddress,
                 status: "pending",
                 createdAt: new Date().toISOString(),
-                walletAddress: walletAddress,
+                updatedAt: new Date().toISOString(),
             };
 
-            // Submit to Firebase
-            await addDoc(collection(db, "ngo"), finalData);
+            const docRef = await addDoc(collection(db, "ngo"), ngoData);
+
             setSuccess(true);
-        } catch (err) {
-            console.error("Error submitting form:", err);
-            setError(err.message);
+            navigate("/login");
+        } catch (error) {
+            console.error("Error registering NGO:", error);
+            setError(error.message);
         } finally {
             setSubmitting(false);
         }

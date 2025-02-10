@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import { X, AlertCircle, DollarSign } from "lucide-react";
 import { ethers } from "ethers";
-import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
 const DonateModal = ({ isOpen, onClose, campaign, onSuccess }) => {
     const [amount, setAmount] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const navigate = useNavigate();
 
     const handleDonate = async (e) => {
         e.preventDefault();
@@ -16,69 +15,27 @@ const DonateModal = ({ isOpen, onClose, campaign, onSuccess }) => {
             setError(null);
 
             // Validate amount
-            if (parseFloat(amount) <= 0) {
-                throw new Error("Amount must be greater than 0");
+            if (!amount || parseFloat(amount) <= 0) {
+                throw new Error("Please enter a valid donation amount");
             }
 
-            // Check if campaign is still active
-            if (new Date(campaign.deadline) < new Date()) {
-                throw new Error("Campaign has ended");
-            }
+            // Get donor's wallet address
+            const accounts = await window.ethereum.request({
+                method: "eth_requestAccounts",
+            });
+            const donorWallet = accounts[0];
 
-            // Check if campaign goal is reached
-            const totalRaised = parseFloat(campaign.totalRaised) || 0;
-            const goal = parseFloat(campaign.goal) || 0;
-            if (totalRaised >= goal) {
-                throw new Error("Campaign goal has been reached");
-            }
+            // Convert ETH amount to Wei using ethers
+            const amountInWei = ethers.parseEther(amount.toString());
 
-            const walletAddress = localStorage.getItem("account");
-            if (!walletAddress) {
-                throw new Error("Please connect your wallet first");
-            }
-
-            // Get the provider and signer
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            const signer = provider.getSigner();
-
-            // Check user's balance
-            const balance = await provider.getBalance(walletAddress);
-            const amountInWei = ethers.utils.parseEther(amount);
-            if (balance.lt(amountInWei)) {
-                throw new Error("Insufficient balance");
-            }
-
-            // Contract interaction
-            const contractAddress = process.env.REACT_APP_CONTRACT_ADDRESS;
-            const contractABI = [
-                "function donate(string memory campaignId) external payable",
-                // Add other contract functions as needed
-            ];
-
-            const contract = new ethers.Contract(
-                contractAddress,
-                contractABI,
-                signer
-            );
-
-            // Send transaction
-            const tx = await contract.donate(campaign.id, {
-                value: amountInWei,
+            console.log("Sending donation:", {
+                campaignId: campaign.id,
+                amount,
+                amountInWei: amountInWei.toString(),
+                donorWallet,
             });
 
-            // Wait for transaction confirmation
-            await tx.wait();
-
-            // Save donation to backend
-            const donationData = {
-                campaignId: campaign.id,
-                ngoId: campaign.ngoId,
-                donorWallet: walletAddress,
-                amount: amount,
-                transactionHash: tx.hash,
-                timestamp: new Date().toISOString(),
-            };
-
+            // Request MetaMask transaction
             const response = await fetch(
                 "http://localhost:5987/api/dashboard/donations/create",
                 {
@@ -86,21 +43,34 @@ const DonateModal = ({ isOpen, onClose, campaign, onSuccess }) => {
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify(donationData),
+                    body: JSON.stringify({
+                        campaignId: campaign.id,
+                        amountInWei: amountInWei.toString(),
+                        donorWallet,
+                    }),
                 }
             );
 
             if (!response.ok) {
-                throw new Error("Failed to record donation");
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to donate");
             }
 
-            onSuccess(donationData);
-            onClose();
-        } catch (err) {
-            setError(err.message);
-            if (err.message.includes("wallet")) {
-                navigate("/login");
+            const donation = await response.json();
+            console.log("Donation successful:", donation);
+
+            // Update campaign with new total
+            if (donation.totalRaised) {
+                campaign.totalRaised = donation.totalRaised;
             }
+
+            toast.success("Donation successful!");
+            onSuccess(donation);
+            onClose();
+        } catch (error) {
+            console.error("Error donating:", error);
+            toast.error(error.message);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -123,14 +93,14 @@ const DonateModal = ({ isOpen, onClose, campaign, onSuccess }) => {
                     </button>
                 </div>
 
-                <form onSubmit={handleDonate} className="p-6 space-y-6">
-                    {error && (
-                        <div className="flex items-center p-4 bg-red-50 rounded-lg text-red-600">
-                            <AlertCircle className="h-5 w-5 mr-2" />
-                            {error}
-                        </div>
-                    )}
+                {error && (
+                    <div className="flex items-center p-4 bg-red-50 rounded-lg text-red-600">
+                        <AlertCircle className="h-5 w-5 mr-2" />
+                        {error}
+                    </div>
+                )}
 
+                <form onSubmit={handleDonate} className="p-6 space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Campaign

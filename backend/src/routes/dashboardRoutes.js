@@ -1,13 +1,14 @@
 import express from 'express';
+import ContractService from '../services/contractService.js';
 import FirestoreService from '../services/firestoreService.js';
 
 const router = express.Router();
 
-// NGO Routes
-router.get('/ngo/all', async (req, res) => {
+// NGO Routes (Firestore)
+router.post('/ngo/register', async (req, res) => {
     try {
-        const ngos = await FirestoreService.getAllNGOs();
-        res.json(ngos);
+        const ngo = await FirestoreService.createNGO(req.body);
+        res.json(ngo);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -25,35 +26,7 @@ router.get('/ngo/:walletAddress', async (req, res) => {
     }
 });
 
-// Campaign Routes
-router.get('/campaigns/all', async (req, res) => {
-    try {
-        const campaigns = await FirestoreService.getAllCampaigns();
-        res.json(campaigns);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-router.get('/campaigns/ngo/:ngoId', async (req, res) => {
-    try {
-        const campaigns = await FirestoreService.getCampaignsByNGO(req.params.ngoId);
-        res.json(campaigns);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Donation Routes
-router.get('/donations/ngo/:ngoId', async (req, res) => {
-    try {
-        const donations = await FirestoreService.getDonationsByNGO(req.params.ngoId);
-        res.json(donations);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
+// User Donation Routes
 router.get('/donations/user/:walletAddress', async (req, res) => {
     try {
         const donations = await FirestoreService.getDonationsByUser(req.params.walletAddress);
@@ -63,112 +36,257 @@ router.get('/donations/user/:walletAddress', async (req, res) => {
     }
 });
 
-// Withdrawal Routes
-router.get('/withdrawals/:ngoId', async (req, res) => {
+// Campaign Routes (Smart Contract)
+router.post('/campaigns/create', async (req, res) => {
     try {
-        const withdrawals = await FirestoreService.getWithdrawalRequests(req.params.ngoId);
-        res.json(withdrawals);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+        // First check NGO status
+        const ngo = await FirestoreService.getNGOByWallet(req.body.ngoAddress);
 
-// Admin NGO Verification Routes
-router.get('/admin/ngos/pending', async (req, res) => {
-    try {
-        const ngos = await FirestoreService.getPendingNGOs();
-        res.json(ngos);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-router.get('/admin/ngos/approved', async (req, res) => {
-    try {
-        const ngos = await FirestoreService.getApprovedNGOs();
-        res.json(ngos);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-router.get('/admin/ngos/rejected', async (req, res) => {
-    try {
-        const ngos = await FirestoreService.getRejectedNGOs();
-        res.json(ngos);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-router.put('/admin/ngos/:id/status', async (req, res) => {
-    try {
-        const { status, remarks } = req.body;
-        if (!['approved', 'rejected', 'pending'].includes(status)) {
-            return res.status(400).json({ error: 'Invalid status' });
+        if (!ngo) {
+            return res.status(404).json({ error: 'NGO not found' });
         }
-        await FirestoreService.updateNGOStatus(req.params.id, status, remarks);
-        res.json({ message: 'NGO status updated successfully' });
+
+        if (ngo.status !== 'approved') {
+            return res.status(403).json({
+                error: 'NGO must be approved before creating campaigns'
+            });
+        }
+
+        // Create campaign on blockchain
+        const campaign = await ContractService.createCampaign(
+            req.body,
+            req.body.ngoAddress
+        );
+
+        // Store campaign in Firestore
+        const firestoreCampaign = await FirestoreService.createCampaign({
+            ...campaign,
+            ngoId: ngo.id,
+            donors: []
+        });
+
+        res.json(firestoreCampaign);
+    } catch (error) {
+        console.error('Error creating campaign:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/campaigns/all', async (req, res) => {
+    try {
+        const campaigns = await ContractService.getAllCampaigns();
+        res.json(campaigns);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Admin Dashboard Routes
-router.get('/admin/stats', async (req, res) => {
+// Donation Routes
+router.post('/donations/create', async (req, res) => {
     try {
-        const stats = await FirestoreService.getAdminDashboardStats();
-        res.json(stats);
+        const { campaignId, amountInWei, donorWallet } = req.body;
+        console.log('Donation request:', { campaignId, amountInWei, donorWallet });
+
+        // Validate inputs
+        if (!campaignId || !amountInWei || !donorWallet) {
+            return res.status(400).json({
+                error: 'Missing required fields'
+            });
+        }
+
+        // Create blockchain transaction
+        const donation = await ContractService.donate(
+            campaignId,
+            amountInWei,
+            donorWallet
+        );
+
+        console.log('Donation successful:', donation);
+
+        // Return the donation with updated campaign total
+        res.json(donation);
+    } catch (error) {
+        console.error('Donation error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Withdrawal Routes
+router.post('/withdrawals/create', async (req, res) => {
+    try {
+        const withdrawal = await ContractService.withdrawFunds(
+            req.body.campaignId,
+            req.body.ngoAddress
+        );
+
+        // Store withdrawal record in Firestore
+        const withdrawalRecord = await FirestoreService.createWithdrawal({
+            ...withdrawal,
+            ngoId: req.body.ngoId,
+            timestamp: new Date().toISOString(),
+            status: 'completed'
+        });
+
+        res.json(withdrawalRecord);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-router.get('/admin/recent-registrations', async (req, res) => {
+// Campaign Management Routes
+router.post('/campaigns/:id/pause', async (req, res) => {
     try {
-        const registrations = await FirestoreService.getRecentNGORegistrations();
-        res.json(registrations);
+        await ContractService.pauseCampaign(req.params.id, req.body.ngoAddress);
+        res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-router.get('/admin/recent-donations', async (req, res) => {
+router.post('/campaigns/:id/resume', async (req, res) => {
     try {
-        const donations = await FirestoreService.getRecentDonations();
+        await ContractService.resumeCampaign(req.params.id, req.body.ngoAddress);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// NGO Dashboard Routes
+router.get('/campaigns/ngo/:ngoId', async (req, res) => {
+    try {
+        // First get NGO's wallet address
+        const ngo = await FirestoreService.getNGOById(req.params.ngoId);
+        if (!ngo) {
+            return res.status(404).json({ error: 'NGO not found' });
+        }
+
+        // Get all campaigns from smart contract and filter by NGO's address
+        const allCampaigns = await ContractService.getAllCampaigns();
+        const ngoCampaigns = allCampaigns.filter(
+            campaign => campaign.ngoAddress.toLowerCase() === ngo.walletAddress.toLowerCase()
+        );
+
+        res.json(ngoCampaigns);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/donations/ngo/:ngoId', async (req, res) => {
+    try {
+        // First get NGO's wallet address
+        const ngo = await FirestoreService.getNGOById(req.params.ngoId);
+        if (!ngo) {
+            return res.status(404).json({ error: 'NGO not found' });
+        }
+
+        // Get all campaigns for this NGO
+        const allCampaigns = await ContractService.getAllCampaigns();
+        const ngoCampaigns = allCampaigns.filter(
+            campaign => campaign.ngoAddress.toLowerCase() === ngo.walletAddress.toLowerCase()
+        );
+
+        // Get donations for each campaign
+        const donations = [];
+        for (const campaign of ngoCampaigns) {
+            const campaignDonations = await ContractService.getCampaignDonations(campaign.id);
+            donations.push(...campaignDonations);
+        }
+
         res.json(donations);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-router.post('/campaigns/create', async (req, res) => {
+router.get('/withdrawals/:ngoId', async (req, res) => {
     try {
-        const campaign = await FirestoreService.createCampaign(req.body);
-        res.json(campaign);
+        // First get NGO's wallet address
+        const ngo = await FirestoreService.getNGOById(req.params.ngoId);
+        if (!ngo) {
+            return res.status(404).json({ error: 'NGO not found' });
+        }
+
+        // Get all withdrawals from smart contract
+        const withdrawals = await ContractService.getNGOWithdrawals(ngo.walletAddress);
+        res.json(withdrawals);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-router.post('/donations/create', async (req, res) => {
+// Add these routes
+router.post('/campaigns/:id/refund', async (req, res) => {
     try {
-        const donation = await FirestoreService.createDonation(req.body);
-        res.json(donation);
+        await ContractService.refundDonors(req.params.id, req.body.ngoAddress);
+        res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Add this route to get campaign details
-router.get('/campaign/:id', async (req, res) => {
+router.post('/campaigns/:id/remove', async (req, res) => {
     try {
-        const campaign = await FirestoreService.getCampaignById(req.params.id);
+        await ContractService.removeCampaign(req.params.id, req.body.ngoAddress);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/campaigns/:id/balance', async (req, res) => {
+    try {
+        const balance = await ContractService.getCampaignBalance(req.params.id);
+        res.json({ balance });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Specific campaign routes first
+router.get('/campaigns/all', async (req, res) => {
+    try {
+        const campaigns = await ContractService.getAllCampaigns();
+        res.json(campaigns);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/campaigns/ngo/:ngoId', async (req, res) => {
+    try {
+        // First get NGO's wallet address
+        const ngo = await FirestoreService.getNGOById(req.params.ngoId);
+        if (!ngo) {
+            return res.status(404).json({ error: 'NGO not found' });
+        }
+
+        // Get all campaigns from smart contract and filter by NGO's address
+        const allCampaigns = await ContractService.getAllCampaigns();
+        const ngoCampaigns = allCampaigns.filter(
+            campaign => campaign.ngoAddress.toLowerCase() === ngo.walletAddress.toLowerCase()
+        );
+
+        res.json(ngoCampaigns);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Then the parameterized route
+router.get('/campaigns/:id', async (req, res) => {
+    try {
+        console.log('Fetching campaign with ID:', req.params.id);
+        const campaign = await ContractService.getCampaignById(req.params.id);
+
         if (!campaign) {
             return res.status(404).json({ error: 'Campaign not found' });
         }
+
         res.json(campaign);
     } catch (error) {
+        console.error('Error in campaign route:', error);
         res.status(500).json({ error: error.message });
     }
 });
