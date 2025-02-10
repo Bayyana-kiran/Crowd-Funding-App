@@ -15,32 +15,35 @@ import HelpSupport from './pages/HelpSupport';
 import Explorer from './pages/Explorer';
 import TermsConditions from './pages/TermsConditions';
 import AdminDash from './admin/AdminDashboard';
+import { SearchProvider } from './context/SearchContext';
 
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<MetaMaskLogin />} />
-            <Route path="/admin" element={<AdminVerification />} />
-            <Route path="/campaigns" element={<Campaigns />} />
-            <Route path="/campaign/:id" element={<CampaignDetails />} />
-            <Route path="/ngo/register" element={<NGORegistration />} />
-            <Route path="/ngo-dashboard" element={<NGODashboard />} />
-            <Route path="/user-dashboard" element={<UserDashboard />} />
-            <Route path="/withdrawal" element={<WithdrawalRequest />} />
-            <Route path="/help" element={<HelpSupport />} />
-            <Route path="/explorer" element={<Explorer />} />
-            <Route path="/terms" element={<TermsConditions />} />
-            <Route path="/admin-dashboard" element={<AdminDash />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <SearchProvider>
+        <div className="min-h-screen flex flex-col bg-gray-50">
+          <Navbar />
+          <main className="flex-grow">
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<MetaMaskLogin />} />
+              <Route path="/admin" element={<AdminVerification />} />
+              <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/campaign/:id" element={<CampaignDetails />} />
+              <Route path="/ngo/register" element={<NGORegistration />} />
+              <Route path="/ngo-dashboard" element={<NGODashboard />} />
+              <Route path="/user-dashboard" element={<UserDashboard />} />
+              <Route path="/withdrawal" element={<WithdrawalRequest />} />
+              <Route path="/help" element={<HelpSupport />} />
+              <Route path="/explorer" element={<Explorer />} />
+              <Route path="/terms" element={<TermsConditions />} />
+              <Route path="/admin-dashboard" element={<AdminDash />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </SearchProvider>
     </Router>
   );
 }

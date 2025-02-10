@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, Wallet, Search } from "lucide-react";
+import { useSearch } from '../../context/SearchContext';
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [account, setAccount] = useState(localStorage.getItem("account") || null);
+  const { setSearchTerm } = useSearch();
 
   useEffect(() => {
     async function checkMetaMask() {
@@ -63,6 +65,7 @@ function Navbar() {
               <input
                 type="text"
                 placeholder="Search campaigns..."
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-64 px-4 py-1 text-sm border rounded-full focus:outline-none focus:border-indigo-500"
               />
               <Search className="absolute right-3 top-1.5 h-4 w-4 text-gray-400" />
@@ -106,6 +109,7 @@ function Navbar() {
               <input
                 type="text"
                 placeholder="Search campaigns..."
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 text-sm border rounded-full focus:outline-none focus:border-indigo-500"
               />
             </div>

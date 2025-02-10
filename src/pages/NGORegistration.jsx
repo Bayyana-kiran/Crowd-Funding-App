@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Web3 from "web3";
-import { db, collection, addDoc } from "../firebase/firebase";
+// import { db, collection, addDoc } from "../firebase/firebase";
 import {
     CheckCircle,
     AlertCircle,
