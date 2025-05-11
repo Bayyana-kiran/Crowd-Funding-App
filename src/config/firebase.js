@@ -2,14 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyCInetPuElJH-TWKIYv8kUcswvbHSYIp5o",
-    authDomain: "crowd-funding-app-866f0.firebaseapp.com",
-    projectId: "crowd-funding-app-866f0",
-    storageBucket: "crowd-funding-app-866f0.appspot.com",
-    messagingSenderId: "307816974854",
-    appId: "1:307816974854:web:f0a4fc02038bfbadc31187",
-    measurementId: "G-BV6RKVV7XT"
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.REACT_APP_FIREBASE_APP_ID,
+    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
+
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
